@@ -36,11 +36,11 @@ Adafruit_MQTT_Publish pubFeed2 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/fee
  //Moisture sensor & OLED
  String dateTime, timeOnly;
  const int DIRTSPIKE = A0;
- const int PUMP = D10;
+ const int PUMP = D16;
  int moist, lastTime;
 
  unsigned long pumpRunTime = 500;  
- unsigned long waitTime = 180000;  
+ unsigned long waitTime = 60000;  
  unsigned long lastPumpTime = 0;  
  unsigned long lastMoistureCheckTime = 0; 
 
@@ -50,7 +50,7 @@ Adafruit_MQTT_Publish pubFeed2 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/fee
  bool MQTT_ping();
  float subValue,pubValue;
 
-SYSTEM_MODE(SEMI_AUTOMATIC);
+SYSTEM_MODE(AUTOMATIC);
 
 SYSTEM_THREAD(ENABLED);
 
@@ -58,12 +58,12 @@ SYSTEM_THREAD(ENABLED);
 void setup() {
   Serial.begin (9600);
 
-    // Connect to Internet but not Particle Cloud
-    WiFi.on();
-    WiFi.connect();
-    while(WiFi.connecting()) {
-      Serial.printf(".");
-    }
+    // // Connect to Internet but not Particle Cloud
+    // WiFi.on();
+    // WiFi.connect();
+    // while(WiFi.connecting()) {
+    //   Serial.printf(".");
+    // }
 
   // Setup MQTT subscription
   mqtt.subscribe(&subFeed);
@@ -80,18 +80,15 @@ void setup() {
 
 //Time Requires Particle Cloud
   Time.zone (-6);
-  //Particle.syncTime ();
+  Particle.syncTime ();
   
 pinMode (DIRTSPIKE,INPUT);
 pinMode (PUMP, OUTPUT);
-
 }
 
 void loop() {
-  digitalWrite (PUMP, LOW);
-  
-  if (millis() - lastMoistureCheckTime > waitTime) {
-    lastMoistureCheckTime = millis();
+  //digitalWrite (PUMP, LOW);
+
 
 //collect data and send to OLED
     dateTime = Time.timeStr();
@@ -103,7 +100,6 @@ void loop() {
     float hum = bme.readHumidity();
 
     moist = analogRead(DIRTSPIKE);
-    int moisturePercentage = map(moist, 0, 4095, 0, 100);
 
     display.clearDisplay();
     display.setCursor(0,0);
@@ -113,25 +109,32 @@ void loop() {
     display.printf("Moisture = %i\n",moist);
     display.display();
 
-//Publish to Dashboard
-  if(mqtt.Update()) {
-    pubValue=analogRead (DIRTSPIKE);
-    pubFeed1.publish(pubValue);
-
-    String tempStr = "Temp: " + String(tempF, 2) + "F";
-    pubFeed2.publish(tempStr.c_str());
-
-    String humStr = "Humidity: " + String(hum,2);
-    pubFeed2.publish(humStr.c_str());
-  } 
-if (moisturePercentage <30){
-  if (millis() - lastPumpTime > pumpRunTime) {  // Wait for pump to be off
-    digitalWrite(PUMP, HIGH);  // Turn pump on
-    lastPumpTime = millis();  // Record the time the
+  if (millis() - lastMoistureCheckTime > waitTime) {
+    lastMoistureCheckTime = millis();
+    if (moist>3300){
+      if (millis() - lastPumpTime > pumpRunTime) {  
+      digitalWrite(PUMP, HIGH); 
+      lastPumpTime = millis();  
+      }
     }
   }
   if (millis() - lastPumpTime >= pumpRunTime && digitalRead(PUMP) == HIGH) {
-    digitalWrite(PUMP, LOW);  //
-  }
+    digitalWrite(PUMP, LOW); 
+    }
+
+  if (millis()-lastTime>10000){
+    lastTime=millis();
+
+      if(mqtt.Update()) {
+      pubValue=analogRead (DIRTSPIKE);
+      pubFeed1.publish(pubValue);
+
+  String tempStr = "Temp: " + String(tempF, 2) + "F";
+  pubFeed2.publish(tempStr.c_str());
+
+  String humStr = "Humidity: " + String(hum,2);
+  pubFeed2.publish(humStr.c_str());
+  } 
 }
 }
+  
